@@ -1,16 +1,31 @@
-# This is a sample Python script.
+from typing import List
 
-# Press ⌃R to execute it or replace it with your code.
-# Press Double ⇧ to search everywhere for classes, files, tool windows, actions, and settings.
+import feedparser
+from dataclasses import dataclass
+
+@dataclass
+class Cve:
+    url: str
+    description: str
+
+class RssCollector:
+
+    whitelist: List[str] #
+
+    # TODO any url from url list files
+    RSS_URL = "https://nvd.nist.gov/feeds/xml/cve/misc/nvd-rss.xml"
+
+    def exist_in_filter_list(self, summary: str) -> bool:
+        # TODO
+        # read whitelist
+        return "whitelist" in summary
+
+    def main(self):
+        full_cve_list = feedparser.parse(self.RSS_URL).entries
+        cve_list: List[Cve] = list(map(lambda cve: Cve(url=cve.id, description=cve.summary), full_cve_list))
+        list(filter(lambda cve: cve, cve_list))
 
 
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press ⌘F8 to toggle the breakpoint.
-
-
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    print_hi('PyCharm')
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    r = RssCollector()
+    r.main()
