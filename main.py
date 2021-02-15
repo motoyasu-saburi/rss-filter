@@ -5,6 +5,8 @@ from typing import List, Optional
 import feedparser
 from dataclasses import dataclass
 
+import argparse
+
 @dataclass
 class Cve:
     url: str
@@ -12,22 +14,38 @@ class Cve:
 
 
 class RssCollector:
-    whitelist: List[Optional[str]]  #
+    whitelist: List[Optional[str]]
 
     WHITELIST_DIR = os.getcwd() + "/resource/whitelist.txt"
     RSS_URL = "https://nvd.nist.gov/feeds/xml/cve/misc/nvd-rss.xml"
     SLACK_INCOMING_WEBHOOK_URL_PATH: str
 
     def __init__(self):
+        print("-------------------------")
+        self.parse_arguments()
+        print("-------------------------")
+
         self.set_whitelist(self.WHITELIST_DIR)
         # TODO change Env to Arg
         self.SLACK_INCOMING_WEBHOOK_URL_PATH = os.environ.get("INCOMING_WEBHOOK_PATH")  # Do not include domain.
         if self.SLACK_INCOMING_WEBHOOK_URL_PATH is None:
             raise Exception("Environment variable ( 'INCOMING_WEBHOOK_PATH' )  is not set.")
 
+    def parse_arguments(self):
+        parser = argparse.ArgumentParser(description='Process some integers.')
+        parser.add_argument('incoming_webhook_path',
+                            type=str,
+                            metavar='N',
+                            help='webhook path')
+        # parser.add_argument('--sum',
+        #                     dest='accumulate',
+        #                     action='store_const',
+        #                     const=sum,
+        #                     default=max,
+        #                     help='sum the integers (default: find the max)')
 
-
-
+        args = parser.parse_args()
+        print(args.accumulate(args.incoming_webhook_path))
 
     def set_whitelist(self, whitelist_dir: str) -> None:
         def __filter_duplicate_and_invalid_value(wl: List[str]) -> List[str]:
