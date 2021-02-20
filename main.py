@@ -1,6 +1,7 @@
 import os
+from datetime import datetime
 from http import client
-from typing import List, Optional
+from typing import List, Optional, Any
 
 import feedparser
 from dataclasses import dataclass
@@ -10,19 +11,21 @@ class Cve:
     title: str
     url: str
     description: str
+    date: datetime
 
 
 class RssCollector:
     whitelist: List[Optional[str]]  #
 
-    WHITELIST_DIR = os.getcwd() + "/resource/whitelist.txt"
+    whitelist_dir: str = os.getcwd() + "/resource/whitelist.txt"
     RSS_URL = "https://nvd.nist.gov/feeds/xml/cve/misc/nvd-rss.xml"
     SLACK_INCOMING_WEBHOOK_URL_PATH: str
 
-    def __init__(self):
-        self.set_whitelist(self.WHITELIST_DIR)
+    def __init__(self, whitelist_dir=f"{os.getcwd()}/resource/whitelist.txt"):
+        self.whitelist_dir = whitelist_dir
+        self.set_whitelist(self.whitelist_dir)
         # TODO change Env to Arg
-        self.SLACK_INCOMING_WEBHOOK_URL_PATH = ""
+        self.SLACK_INCOMING_WEBHOOK_URL_PATH = "REPLACE_ME"
         #self.SLACK_INCOMING_WEBHOOK_URL_PATH = os.environ.get("INCOMING_WEBHOOK_PATH")  # Do not include domain.
         #if self.SLACK_INCOMING_WEBHOOK_URL_PATH is None:
         #    raise Exception("Environment variable ( 'INCOMING_WEBHOOK_PATH' )  is not set.")
@@ -36,8 +39,10 @@ class RssCollector:
             file_content = f.read()
             self.whitelist = __filter_duplicate_and_invalid_value(file_content.split("\n"))
 
+    def is_after_criteria_date(self, criteria_date: datetime, filter_target_date: datetime):
+        return criteria_date < filter_target_date
 
-    def exist_in_filter_list(self, summary: str, whitelists: List[Optional[str]]) -> bool:
+    def exists_in_filter_list(self, summary: str, whitelists: List[Optional[str]]) -> bool:
         lower_summary = summary.lower()
         for wl in whitelists:
             if wl.lower() in lower_summary:
@@ -56,13 +61,31 @@ class RssCollector:
             body = '{"text": "' + text_body + '"}'
             httpclient.request(method=WEB_HOOK_METHOD, url=WEB_HOOK_PATH, headers=headers, body=body)
             httpclient.close()
-        return 200 # response_status
+        return 200  # response_status
+
+    def get_cve(self) -> List[Cve]:
+        def __get_cve_feed_from_rss() -> Any:
+            return feedparser.parse(self.RSS_URL).entries
+
+        cve_list: Any = __get_cve_feed_from_rss()
+        return list(
+            map(lambda cve: Cve(
+                title=cve.title,
+                url=cve.id,
+                description=cve.summary,
+                date=datetime.strptime(cve.date, "%Y-%m-%dT%H:%M:%SZ")
+            ), cve_list)
+        )
 
     def main(self):
-        full_cve_list = feedparser.parse(self.RSS_URL).entries
-        cve_list: List[Cve] = list(map(lambda cve: Cve(title=cve.title, url=cve.id, description=cve.summary), full_cve_list))
-        filtered_cve_list: List[Cve] = list(filter(lambda cve: not self.exist_in_filter_list(cve.description, self.whitelist), cve_list))
-        self.push_cve_to_slack(filtered_cve_list)
+        full_cve_list = self.get_cve()
+        filtered_cve_list: List[Cve] = list(
+            filter(lambda cve: (
+                    not self.exists_in_filter_list(cve.description, self.whitelist)
+                    and self.is_after_criteria_date(datetime.now(), cve.date)
+            ), full_cve_list)
+        )
+        # self.push_cve_to_slack(filtered_cve_list)
 
 
 if __name__ == '__main__':
