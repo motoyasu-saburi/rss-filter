@@ -1,11 +1,12 @@
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from http import client
 from typing import List, Optional, Any
 
 import feedparser
 from dataclasses import dataclass
 
+from repository.s3_repository import S3Repository
 
 @dataclass
 class Cve:
@@ -14,7 +15,6 @@ class Cve:
     description: str
     date: datetime
 
-
 class RssCollector:
     whitelist: List[Optional[str]]
     WEBHOOK_ENV_NAME = "CVE_ALERT_WEBHOOK_PATH"
@@ -22,6 +22,7 @@ class RssCollector:
     whitelist_dir: str = os.getcwd() + "/resource/whitelist.txt"
     RSS_URL = "https://nvd.nist.gov/feeds/xml/cve/misc/nvd-rss.xml"
     SLACK_INCOMING_WEBHOOK_URL_PATH: str
+    repository: S3Repository()  # TODO S3 URL
 
     def __init__(self, whitelist_dir=f"{os.getcwd()}/resource/whitelist.txt"):
         self.whitelist_dir = whitelist_dir
@@ -49,12 +50,13 @@ class RssCollector:
                 return True
         return False
 
-    def push_cve_to_slack(self, cves: List[Cve], webhook_url_path: str, host="hooks.slack.com") -> int:
+    def push_cve_to_slack(self, cves: List[Cve], webhook_url_path: str, host="hooks.slack.com") -> Optional[int]:
         WEB_HOOK_METHOD = "POST"
         httpclient = client.HTTPSConnection(host)
         headers = {"Content-type": "application/json"}
-        last_status_code: int
+        last_status_code: Optional[int] = None
 
+        print(f"Cve length: {len(cves)}")
         for cve in cves:
             text_body = f"<{cve.url}|{cve.title}>\n{cve.description}"
             body = '{"text": "' + text_body + '"}'
@@ -63,7 +65,7 @@ class RssCollector:
             httpclient.close()
 
         # TODO check all status code.
-        return last_status_code  # response_status
+        return last_status_code   # response_status
 
     def get_cve(self) -> List[Cve]:
         def __get_cve_feed_from_rss() -> Any:
@@ -79,17 +81,26 @@ class RssCollector:
             ), cve_list)
         )
 
-    def main(self):
-        full_cve_list = self.get_cve()
-        filtered_cve_list: List[Cve] = list(
-            filter(lambda cve: (
-                    not self.exists_in_filter_list(cve.description, self.whitelist)
-                    and self.is_after_criteria_date(datetime.now(), cve.date)
-            ), full_cve_list)
-        )
-        self.push_cve_to_slack(cves=filtered_cve_list, webhook_url_path=self.SLACK_INCOMING_WEBHOOK_URL_PATH)
+    def get_pref_exec_time(self) -> datetime:
+        # TODO
+        return datetime.now() - timedelta(days=1)
 
+    def main(self) -> bool:
+        try:
+            full_cve_list = self.get_cve()
+            exec_prev_date = self.repository.get_previous_exec_time()
+            filtered_cve_list: List[Cve] = list(
+                filter(lambda cve: (
+                        not self.exists_in_filter_list(cve.description, self.whitelist)
+                        and self.is_after_criteria_date(exec_prev_date, cve.date)
+                ), full_cve_list)
+            )
+            self.push_cve_to_slack(cves=filtered_cve_list, webhook_url_path=self.SLACK_INCOMING_WEBHOOK_URL_PATH)
+            self.repository.save_execute_datetime(datetime.now())
+            return True
+        except:
+            return False
 
 if __name__ == '__main__':
     r = RssCollector()
-    r.main()
+    _ = r.main()

@@ -2,7 +2,10 @@ import tempfile
 from datetime import datetime
 from typing import List
 from unittest import TestCase
+from unittest.mock import patch, Mock
+
 import httpretty as httpretty
+from pip._vendor import requests
 
 from main import RssCollector, Cve
 
