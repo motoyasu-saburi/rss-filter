@@ -39,6 +39,21 @@ class RssCollector:
             file_content = f.read()
             self.whitelist = __filter_duplicate_and_invalid_value(file_content.split("\n"))
 
+    def add_whitelist(self) -> bool:
+        pass
+
+    def delete_whitelist(self) -> bool:
+        pass
+
+    def get_whitelist_data(self) -> str:
+        pass
+
+    def bulk_add_whitelist(self) -> bool:
+        pass
+
+    def bulk_delete_whitelist(self) -> bool:
+        pass
+
     def is_after_criteria_date(self, criteria_date: datetime, filter_target_date: datetime):
         return criteria_date < filter_target_date
 
